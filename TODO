@@ -1,0 +1,9 @@
+ - [?] Task 1: Counting words
+ - [ ] Task 2: Image processing
+ - [ ] Time measurements of each task
+ - [ ] Analysis report: 
+    - [ ] What is the time complexity of each task?
+    - [ ] What is the space complexity of each task?
+    - [ ] What is the bottleneck of the program?
+    - [ ] What is the speedup of the parallel version?
+
