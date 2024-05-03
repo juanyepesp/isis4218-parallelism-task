@@ -1,1 +1,8 @@
 .DS_Store
+**.elixir_ls**
+**.formatter**
+**config
+**_build
+**rel
+**rootfs_overlay
+**mix.lock
