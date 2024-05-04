@@ -107,6 +107,10 @@ defmodule Parallelism do
       {pid, :count, text} ->
         # IO.inspect("")
         send(pid, {self(), :reply, remote_count(text)})
+
+      {:kill} ->
+        IO.puts("Killing worker with pid: #{inspect(self())}")
+        exit(:normal)
     end
 
     execution_loop()
@@ -127,15 +131,16 @@ defmodule Parallelism do
   defp action_loop(text, image1, image2, pids) do
     IO.puts("\nChoose an action to perform:")
     IO.puts("0. Connect new node")
-    IO.puts("1. Start remote workers")
-    IO.puts("2. Show connected nodes")
-    IO.puts("3. Load text")
-    IO.puts("4. Load image 1")
-    IO.puts("5. Load image 2")
-    IO.puts("6. Count words in text")
-    IO.puts("7. Rotate image")
-    IO.puts("8. Morph images")
-    IO.puts("9. Exit")
+    IO.puts("1. Show connected nodes")
+    IO.puts("2. Start remote workers")
+    IO.puts("3. Stop remote workers")
+    IO.puts("4. Load text")
+    IO.puts("5. Load image 1")
+    IO.puts("6. Load image 2")
+    IO.puts("7. Count words in text")
+    IO.puts("8. Rotate image")
+    IO.puts("9. Morph images")
+    IO.puts("10. Exit")
 
     action = IO.gets("\nEnter action number: ") |> String.trim()
 
@@ -145,22 +150,26 @@ defmodule Parallelism do
         action_loop(text, image1, image2, pids)
 
       "1" ->
-        action_loop(text, image1, image2, start_node_workers())
-
-      "2" ->
         show_connected_nodes()
         action_loop(text, image1, image2, pids)
 
+      "2" ->
+        action_loop(text, image1, image2, start_node_workers())
+
       "3" ->
-        action_loop(load_content(), image1, image2, pids)
+        Enum.each(pids, fn pid -> send(pid, :kill) end)
+        action_loop(text, image1, image2, nil)
 
       "4" ->
-        action_loop(text, load_content(), image2, pids)
+        action_loop(load_content(), image1, image2, pids)
 
       "5" ->
-        action_loop(text, image1, load_content(), pids)
+        action_loop(text, load_content(), image2, pids)
 
       "6" ->
+        action_loop(text, image1, load_content(), pids)
+
+      "7" ->
         start = :os.system_time(:millisecond)
         word_count = count(text, pids)
         time = :os.system_time(:millisecond) - start
@@ -169,14 +178,14 @@ defmodule Parallelism do
         IO.puts("Time taken s: #{time / 1000}s")
         action_loop(text, image1, image2, pids)
 
-      "7" ->
+      "8" ->
         angle = IO.gets("Enter angle to rotate image by:")
         rotated_image = rotate(image1, angle)
 
         save_image(rotated_image, "./data/rotated_image.png")
         action_loop(text, image1, image2, pids)
 
-      "8" ->
+      "9" ->
         transformation_images = morph(image1, image2)
         transformation_zip = Enum.zip(transformation_images, 1..length(transformation_images))
 
