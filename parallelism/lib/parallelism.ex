@@ -42,9 +42,9 @@ defmodule Parallelism do
     end)
   end
 
-  defp remote_count(words) do
-    chunk_size = Float.ceil(length(words) / System.schedulers_online()) |> trunc()
-    chunks = Enum.chunk_every(words, chunk_size)
+  defp remote_count(list) do
+    chunk_size = Float.ceil(length(list) / System.schedulers_online()) |> trunc()
+    chunks = Enum.chunk_every(list, chunk_size)
 
     Task.async_stream(chunks, fn chunk ->
       count_helper(chunk)
@@ -104,9 +104,9 @@ defmodule Parallelism do
         # IO.inspect("Received message: #{msg}")
         send(pid, {self(), :reply, "Message #{msg} received on pid #{inspect(self())}"})
 
-      {pid, :count, text} ->
+      {pid, :count, list} ->
         # IO.inspect("")
-        send(pid, {self(), :reply, remote_count(text)})
+        send(pid, {self(), :reply, remote_count(list)})
 
       {:kill} ->
         IO.puts("Killing worker with pid: #{inspect(self())}")
