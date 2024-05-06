@@ -68,11 +68,10 @@ defmodule Parallelism do
     |> Map.new(fn {k, v} -> {k, v} end)
   end
 
-  defp rotate(angle) do
-    {_, image} = Imagineer.load("data/image.png")
+  defp rotate(image, angle) do
 
     # Define the rotation angle in radians
-    deg = angle
+    deg = String.replace(angle, "\n", "") |> String.to_integer()
     angle = Math.deg2rad(deg)
 
     width = image.width
@@ -134,17 +133,15 @@ defmodule Parallelism do
         transparency: nil
       }
 
-      :ok = Imagineer.write(rotated_image, "data/image-rotated-#{deg}.png")
+      rotated_image
   end # Here it should reunite all of the rowsx
 
   defp morph(image1, image2) do
+    :ok
   end
 
   defp save_image(image, path) do
-    case File.write(path, image) do
-      :ok -> IO.puts("Image saved successfully")
-      {:error, reason} -> IO.inspect("Error saving image: #{reason}")
-    end
+    :ok = Imagineer.write(image, path)
   end
 
   defp load_content() do
@@ -160,6 +157,23 @@ defmodule Parallelism do
 
       {:error, reason} ->
         IO.inspect("Error loading text: #{reason}")
+        nil
+    end
+  end
+
+  defp load_image() do
+    file_path =
+      IO.gets("\nEnter file path (with extension) to load image from: ") |> String.trim()
+
+    IO.puts("\nLoading image from file: #{file_path} ...")
+
+    case Imagineer.load("data/image.png") do
+      {:ok, image} ->
+        IO.puts("Image loaded successfully")
+        image
+
+      {:error, reason} ->
+        IO.inspect("Error loading image: #{reason}")
         nil
     end
   end
@@ -230,10 +244,10 @@ defmodule Parallelism do
         action_loop(load_content(), image1, image2, pids)
 
       "5" ->
-        action_loop(text, load_content(), image2, pids)
+        action_loop(text, load_image(), image2, pids)
 
       "6" ->
-        action_loop(text, image1, load_content(), pids)
+        action_loop(text, image1, load_image(), pids)
 
       "7" ->
         start = :os.system_time(:millisecond)
@@ -245,16 +259,15 @@ defmodule Parallelism do
         action_loop(text, image1, image2, pids)
 
       "8" ->
-
         angle = IO.gets("Enter angle to rotate image by:")
         start = :os.system_time(:millisecond)
-        rotated_image = rotate(angle)
+        rotated_image = rotate(image1, angle)
         time = :os.system_time(:millisecond) - start
         IO.puts("\nTime taken ms: #{time}ms")
         IO.puts("Time taken s: #{time / 1000}s")
 
-        # save_image(rotated_image, "./data/rotated_image.png")
-        # action_loop(text, image1, image2, pids)
+        save_image(rotated_image, "./data/image-rotated.png")
+        action_loop(text, image1, image2, pids)
 
       "9" ->
         transformation_images = morph(image1, image2)
