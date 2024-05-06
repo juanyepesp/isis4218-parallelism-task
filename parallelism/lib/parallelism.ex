@@ -57,27 +57,7 @@ defmodule Parallelism do
     end)
   end
 
-  defp count_helper(list) do
-    list
-    |> Stream.map(&String.downcase/1)
-    |> Stream.reject(&(&1 == ""))
-    |> Stream.reject(&String.starts_with?(&1, "'"))
-    |> Stream.reject(&String.ends_with?(&1, "'"))
-    |> Enum.group_by(fn x -> x end)
-    |> Stream.map(fn {k, v} -> {k, Enum.count(v)} end)
-    |> Map.new(fn {k, v} -> {k, v} end)
-  end
-
-  defp rotate(image, angle) do
-
-    # Define the rotation angle in radians
-    deg = String.replace(angle, "\n", "") |> String.to_integer()
-    angle = Math.deg2rad(deg)
-
-    width = image.width
-    height = image.height
-    pixels = image.pixels
-
+  defp rotate_helper(chunk, width, height, angle, pixels) do
     # Calculate the sine and cosine of the angle
     sin_angle = Math.sin(angle)
     cos_angle = Math.cos(angle)
@@ -88,7 +68,7 @@ defmodule Parallelism do
 
     # Rotate the image. This can be done in parallel
     rotated_pixels =
-      Enum.map(0..(height-1), fn y ->
+      Enum.map(chunk, fn y ->
         Enum.map(0..(width-1), fn x ->
           a = x - x0
           b = y - y0
@@ -105,35 +85,82 @@ defmodule Parallelism do
         end)
       end)
 
-      rotated_image = %Imagineer.Image.PNG{
-        alias: nil,
-        width: image.width,
-        height: image.height,
-        bit_depth: image.bit_depth,
-        color_type: image.color_type,
-        color_format: image.color_format,
-        uri: nil,
-        format: :png,
-        attributes: %{},
-        data_content: Imagineer.Image.PNG.Pixels.NoInterlace.encode_pixel_rows(rotated_pixels, image),
-        raw: nil,
-        comment: nil,
-        mask: nil,
-        compression: image.compression,
-        decompressed_data: nil,
-        unfiltered_rows: [],
-        scanlines: [],
-        filter_method: image.filter_method,
-        interlace_method: 0,
-        gamma: nil,
-        palette: [],
-        pixels: rotated_pixels,
-        mime_type: "image/png",
-        background: nil,
-        transparency: nil
-      }
+    rotated_pixels
+  end
 
-      rotated_image
+  defp count_helper(list) do
+    list
+    |> Stream.map(&String.downcase/1)
+    |> Stream.reject(&(&1 == ""))
+    |> Stream.reject(&String.starts_with?(&1, "'"))
+    |> Stream.reject(&String.ends_with?(&1, "'"))
+    |> Enum.group_by(fn x -> x end)
+    |> Stream.map(fn {k, v} -> {k, Enum.count(v)} end)
+    |> Map.new(fn {k, v} -> {k, v} end)
+  end
+
+  defp rotate(image, angle, pids) do
+    pid_amount = length(pids)
+
+    # Define the rotation angle in radians
+    deg = String.replace(angle, "\n", "") |> String.to_integer()
+    angle = Math.deg2rad(deg)
+
+    width = image.width
+    height = image.height
+    pixels = image.pixels
+
+    chunk_size = Float.ceil(height / pid_amount) |> trunc()
+    chunks = Enum.chunk_every(0..(height-1), chunk_size)
+    zipped = Enum.zip(pids, chunks)
+
+    Enum.each(zipped, fn {pid, chunk} ->
+      send(pid, {self(), :rotate, {chunk, width, height, angle, pixels}})
+    end)
+
+    # receive rotated chunks from workers
+    rotated_chunks = Enum.reduce(1..pid_amount, [], fn _, acc ->
+      receive do
+        {_pid, :reply, result} ->
+          [result | acc]
+      end
+    end)
+
+    # Reunite all of the rows
+    rotated_pixels = Enum.reduce(rotated_chunks, [], fn chunk, acc ->
+      acc ++ chunk
+    end)
+
+
+    rotated_image = %Imagineer.Image.PNG{
+      alias: nil,
+      width: image.width,
+      height: image.height,
+      bit_depth: image.bit_depth,
+      color_type: image.color_type,
+      color_format: image.color_format,
+      uri: nil,
+      format: :png,
+      attributes: %{},
+      data_content: Imagineer.Image.PNG.Pixels.NoInterlace.encode_pixel_rows(rotated_pixels, image),
+      raw: nil,
+      comment: nil,
+      mask: nil,
+      compression: image.compression,
+      decompressed_data: nil,
+      unfiltered_rows: [],
+      scanlines: [],
+      filter_method: image.filter_method,
+      interlace_method: 0,
+      gamma: nil,
+      palette: [],
+      pixels: rotated_pixels,
+      mime_type: "image/png",
+      background: nil,
+      transparency: nil
+    }
+
+    rotated_image
   end # Here it should reunite all of the rowsx
 
   defp morph(image1, image2) do
@@ -187,6 +214,9 @@ defmodule Parallelism do
       {pid, :count, list} ->
         # IO.inspect("")
         send(pid, {self(), :reply, remote_count(list)})
+
+      {pid, :rotate, {chunk, width, height, angle, pixels}} ->
+        send(pid, {self(), :reply, rotate_helper(chunk, width, height, angle, pixels)})
 
       {:kill} ->
         IO.puts("Killing worker with pid: #{inspect(self())}")
@@ -261,7 +291,7 @@ defmodule Parallelism do
       "8" ->
         angle = IO.gets("Enter angle to rotate image by:")
         start = :os.system_time(:millisecond)
-        rotated_image = rotate(image1, angle)
+        rotated_image = rotate(image1, angle, pids)
         time = :os.system_time(:millisecond) - start
         IO.puts("\nTime taken ms: #{time}ms")
         IO.puts("Time taken s: #{time / 1000}s")
