@@ -68,8 +68,74 @@ defmodule Parallelism do
     |> Map.new(fn {k, v} -> {k, v} end)
   end
 
-  defp rotate(image, angle) do
-  end
+  defp rotate(angle) do
+    {_, image} = Imagineer.load("data/image.png")
+
+    # Define the rotation angle in radians
+    deg = angle
+    angle = Math.deg2rad(deg)
+
+    width = image.width
+    height = image.height
+    pixels = image.pixels
+
+    # Calculate the sine and cosine of the angle
+    sin_angle = Math.sin(angle)
+    cos_angle = Math.cos(angle)
+
+    # Center of rotation
+    x0 = 0.5 * (width - 1)
+    y0 = 0.5 * (height - 1)
+
+    # Rotate the image. This can be done in parallel
+    rotated_pixels =
+      Enum.map(0..(height-1), fn y ->
+        Enum.map(0..(width-1), fn x ->
+          a = x - x0
+          b = y - y0
+          xf = floor( + a * cos_angle - b * sin_angle + x0)
+          yf = floor( + a * sin_angle + b * cos_angle + y0)
+
+          pixel =
+            if xf >= 0 && xf < width && yf >= 0 && yf < height do
+              Enum.at(Enum.at(pixels, yf), xf)
+            else
+              {0, 0, 0}
+            end
+          {Kernel.elem(pixel, 0), Kernel.elem(pixel, 1), Kernel.elem(pixel, 2)}
+        end)
+      end)
+
+      rotated_image = %Imagineer.Image.PNG{
+        alias: nil,
+        width: image.width,
+        height: image.height,
+        bit_depth: image.bit_depth,
+        color_type: image.color_type,
+        color_format: image.color_format,
+        uri: nil,
+        format: :png,
+        attributes: %{},
+        data_content: Imagineer.Image.PNG.Pixels.NoInterlace.encode_pixel_rows(rotated_pixels, image),
+        raw: nil,
+        comment: nil,
+        mask: nil,
+        compression: image.compression,
+        decompressed_data: nil,
+        unfiltered_rows: [],
+        scanlines: [],
+        filter_method: image.filter_method,
+        interlace_method: 0,
+        gamma: nil,
+        palette: [],
+        pixels: rotated_pixels,
+        mime_type: "image/png",
+        background: nil,
+        transparency: nil
+      }
+
+      :ok = Imagineer.write(rotated_image, "data/image-rotated-#{deg}.png")
+  end # Here it should reunite all of the rowsx
 
   defp morph(image1, image2) do
   end
@@ -179,11 +245,16 @@ defmodule Parallelism do
         action_loop(text, image1, image2, pids)
 
       "8" ->
-        angle = IO.gets("Enter angle to rotate image by:")
-        rotated_image = rotate(image1, angle)
 
-        save_image(rotated_image, "./data/rotated_image.png")
-        action_loop(text, image1, image2, pids)
+        angle = IO.gets("Enter angle to rotate image by:")
+        start = :os.system_time(:millisecond)
+        rotated_image = rotate(angle)
+        time = :os.system_time(:millisecond) - start
+        IO.puts("\nTime taken ms: #{time}ms")
+        IO.puts("Time taken s: #{time / 1000}s")
+
+        # save_image(rotated_image, "./data/rotated_image.png")
+        # action_loop(text, image1, image2, pids)
 
       "9" ->
         transformation_images = morph(image1, image2)
